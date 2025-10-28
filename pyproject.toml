@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fava-forecast"
+version = "0.0.0"
+requires-python = ">=3.9"
+dependencies = [
+    "beancount>=3.2.0",
+    "beanquery>=0.2.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
