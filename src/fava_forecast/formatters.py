@@ -2,7 +2,7 @@
 from decimal import Decimal, ROUND_HALF_UP
 
 
-def _fmt_amount(val: Decimal) -> str:
+def fmt_amount(val: Decimal) -> str:
     if val == 0:
         return "0"
     absval = abs(val)
@@ -27,7 +27,7 @@ def print_breakdown(
 ):
     # compute left width till "="
     left_width = max(
-        len(f"{cur:>{cur_width}}  {_fmt_amount(amt):>{amount_width}} {cur:<{cur_width}}")
+        len(f"{cur:>{cur_width}}  {fmt_amount(amt):>{amount_width}} {cur:<{cur_width}}")
         for cur, amt, _, _ in breakdown
     )
     eq_col = left_width + eq_gap
@@ -38,14 +38,14 @@ def print_breakdown(
     print(title)
     print(border)
     for cur, amt, rate, conv in breakdown:
-        left = f"{cur:>{cur_width}}  {_fmt_amount(amt):>{amount_width}} {cur:<{cur_width}}"
+        left = f"{cur:>{cur_width}}  {fmt_amount(amt):>{amount_width}} {cur:<{cur_width}}"
         if rate is None:
             print(f"{left:<{eq_col}}= (no rate)")
         else:
-            right_val = _fmt_amount(conv.quantize(Decimal('0.01'))) if conv is not None else "-"
+            right_val = fmt_amount(conv.quantize(Decimal('0.01'))) if conv is not None else "-"
             print(f"{left:<{eq_col}}= {right_val:>15} {op_cur}")
 
-    total_fmt = _fmt_amount(total_in_op.quantize(Decimal('0.01')))
+    total_fmt = fmt_amount(total_in_op.quantize(Decimal('0.01')))
     print(line)
     print(f"{'TOTAL':<{eq_col-1}}-> {total_fmt:>15} {op_cur}")
     print(border)

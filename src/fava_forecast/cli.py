@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from .beancount_io import run_bean_query_rows, parse_grouped_amounts
 from .budgets import compute_budget_planned_expenses
 from .convert import convert_breakdown
-from .formatters import print_breakdown
+from .formatters import fmt_amount, print_breakdown
 from .rates import load_prices_to_op
 from .config import detect_operating_currency_from_journal
 
@@ -87,18 +87,15 @@ def main():
         print_breakdown("PLANNED EXPENSES breakdown:", pexp_br, planned_exp, op_currency)
         print_breakdown("BUDGETED EXPENSES breakdown (forecast):", budg_br, planned_budget_exp, op_currency)
 
-    def fmt_num(v: Decimal) -> str:
-        return f"{v:,.2f}".replace(",", " ")
-
-    print(f"Assets:                         {fmt_num(assets_total):>15} {op_currency}")
-    print(f"Liabilities:                    {fmt_num(-liabs_total):>15} {op_currency}")
-    print(f"Net now (Assets - Liabilities): {fmt_num(net_now):>15} {op_currency}")
-    print(f"Planned income in range:        {fmt_num(planned_income):>15} {op_currency}")
-    print(f"Planned expenses in range:      {fmt_num(planned_exp):>15} {op_currency}")
-    print(f"Planned budget expenses:        {fmt_num(planned_budget_exp):>15} {op_currency}")
+    print(f"Assets:                         {fmt_amount(assets_total):>15} {op_currency}")
+    print(f"Liabilities:                    {fmt_amount(-liabs_total):>15} {op_currency}")
+    print(f"Net now (Assets - Liabilities): {fmt_amount(net_now):>15} {op_currency}")
+    print(f"Planned income in range:        {fmt_amount(planned_income):>15} {op_currency}")
+    print(f"Planned expenses in range:      {fmt_amount(planned_exp):>15} {op_currency}")
+    print(f"Planned budget expenses:        {fmt_amount(planned_budget_exp):>15} {op_currency}")
     print("—" * 60)
     sign = "OK ✅" if forecast_end >= 0 else "DEFICIT ❌"
-    print(f"Forecast end balance:           {fmt_num(forecast_end):>15} {op_currency}   [{sign}]")
+    print(f"Forecast end balance:           {fmt_amount(forecast_end):>15} {op_currency}   [{sign}]")
 
 
 if __name__ == "__main__":
