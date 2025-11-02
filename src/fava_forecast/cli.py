@@ -1,16 +1,73 @@
 # cli.py
 import argparse
 import datetime
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
+from typing import List, Tuple
 
-from .beancount_io import run_bean_query_rows, parse_grouped_amounts
+from .beancount_io import (
+    beanquery_grouped_amounts,
+    beanquery_run_lines,
+    beanquery_table_body,
+)
 from .budgets import compute_budget_planned_expenses
-from .convert import convert_breakdown
-from .formatters import fmt_amount, print_breakdown
-from .rates import load_prices_to_op
 from .config import detect_operating_currency_from_journal
+from .convert import amounts_to_converted_breakdown
+from .formatters import print_breakdown, fmt_amount
+from .rates import load_prices_to_op
 
 
+Row = Tuple[str, Decimal]  # (currency, amount)
+
+
+# -----------------------------
+# Query builders
+# -----------------------------
+def q_assets(until: datetime.date) -> str:
+    return (
+        "SELECT currency, sum(position) "
+        f"WHERE account ~ '^Assets' AND date < {until.isoformat()} "
+        "AND 'planned' NOT IN tags GROUP BY currency"
+    )
+
+
+def q_liabs(until: datetime.date) -> str:
+    return (
+        "SELECT currency, sum(position) "
+        f"WHERE account ~ '^Liabilities' AND date < {until.isoformat()} "
+        "AND 'planned' NOT IN tags GROUP BY currency"
+    )
+
+
+def q_planned_income(today: datetime.date, until: datetime.date) -> str:
+    return (
+        "SELECT currency, sum(position) "
+        "WHERE account ~ '^Income' "
+        f"AND date >= {today.isoformat()} AND date < {until.isoformat()} "
+        "AND 'planned' IN tags GROUP BY currency"
+    )
+
+
+def q_planned_expenses(today: datetime.date, until: datetime.date) -> str:
+    return (
+        "SELECT currency, sum(position) "
+        "WHERE account ~ '^Expenses' "
+        f"AND date >= {today.isoformat()} AND date < {until.isoformat()} "
+        "AND 'planned' IN tags GROUP BY currency"
+    )
+
+
+# -----------------------------
+# Helpers
+# -----------------------------
+def run_grouped_rows(journal_path: str, query: str) -> List[Row]:
+    lines = beanquery_run_lines(journal_path, query)
+    body = beanquery_table_body(lines)
+    return beanquery_grouped_amounts(body)
+
+
+# -----------------------------
+# CLI
+# -----------------------------
 def main():
     ap = argparse.ArgumentParser(description="Forecast runway to salary using Beancount + budgets")
     ap.add_argument("--journal", required=True, help="Path to main.bean")
@@ -18,8 +75,8 @@ def main():
     ap.add_argument("--prices", required=True, help="Path to prices.bean")
     ap.add_argument("--until", required=True, help="Salary date YYYY-MM-DD (exclusive)")
     ap.add_argument("--today", default=None, help="Override today YYYY-MM-DD (optional)")
-    ap.add_argument("--currency", default="CRC", help="Override operation currency (optional, default='CRC')")
-    ap.add_argument("--verbose", action="store_true", help="Enable printing detailed report by currencies (default: False)")
+    ap.add_argument("--currency", default="CRC", help="Override operating currency (default: 'CRC')")
+    ap.add_argument("--verbose", action="store_true", help="Print per-currency breakdowns")
     args = ap.parse_args()
 
     until = datetime.date.fromisoformat(args.until)
@@ -35,41 +92,21 @@ def main():
     print(f"Today: {today}  Until(salary): {until}")
 
     # ASSETS
-    q_assets = (
-        f"SELECT currency, sum(position) WHERE account ~ '^Assets' "
-        f"AND date < {until.isoformat()} AND 'planned' NOT IN tags GROUP BY currency"
-    )
-    rows_assets = parse_grouped_amounts(run_bean_query_rows(args.journal, q_assets))
-    assets_total, assets_br = convert_breakdown(rows_assets, rates, op_currency)
+    rows_assets = run_grouped_rows(args.journal, q_assets(until))
+    assets_total, assets_br = amounts_to_converted_breakdown(rows_assets, rates)
 
     # LIABILITIES
-    q_liabs = (
-        f"SELECT currency, sum(position) WHERE account ~ '^Liabilities' "
-        f"AND date < {until.isoformat()} AND 'planned' NOT IN tags GROUP BY currency"
-    )
-    rows_liabs = parse_grouped_amounts(run_bean_query_rows(args.journal, q_liabs))
-    liabs_total, liabs_br = convert_breakdown(rows_liabs, rates, op_currency)
+    rows_liabs = run_grouped_rows(args.journal, q_liabs(until))
+    liabs_total, liabs_br = amounts_to_converted_breakdown(rows_liabs, rates)
 
     # PLANNED INCOME
-    q_planned_income = (
-        f"SELECT currency, sum(position) "
-        f"WHERE account ~ '^Income' "
-        f"AND date >= {today.isoformat()} AND date < {until.isoformat()} "
-        f"AND 'planned' IN tags GROUP BY currency"
-    )
-    rows_pin = parse_grouped_amounts(run_bean_query_rows(args.journal, q_planned_income))
-    rows_pin = [(cur, -amt) for (cur, amt) in rows_pin]  # Income is negative; flip sign
-    planned_income, pin_br = convert_breakdown(rows_pin, rates, op_currency)
+    rows_pin = run_grouped_rows(args.journal, q_planned_income(today, until))
+    rows_pin = [(cur, -amt) for (cur, amt) in rows_pin]
+    planned_income, pin_br = amounts_to_converted_breakdown(rows_pin, rates)
 
     # PLANNED EXPENSES
-    q_planned_exp = (
-        f"SELECT currency, sum(position) "
-        f"WHERE account ~ '^Expenses' "
-        f"AND date >= {today.isoformat()} AND date < {until.isoformat()} "
-        f"AND 'planned' IN tags GROUP BY currency"
-    )
-    rows_pexp = parse_grouped_amounts(run_bean_query_rows(args.journal, q_planned_exp))
-    planned_exp, pexp_br = convert_breakdown(rows_pexp, rates, op_currency)
+    rows_pexp = run_grouped_rows(args.journal, q_planned_expenses(today, until))
+    planned_exp, pexp_br = amounts_to_converted_breakdown(rows_pexp, rates)
 
     # BUDGETED EXPENSES
     planned_budget_exp, budg_br = compute_budget_planned_expenses(
@@ -78,7 +115,7 @@ def main():
 
     net_now = assets_total + liabs_total
     total_future_exp = planned_exp + planned_budget_exp
-    forecast_end = (net_now + planned_income - total_future_exp).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    forecast_end = (net_now + planned_income - total_future_exp).quantize(Decimal("0.01"))
 
     if args.verbose:
         print_breakdown("ASSETS breakdown:", assets_br, assets_total, op_currency)
@@ -100,4 +137,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
