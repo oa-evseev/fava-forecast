@@ -11,8 +11,15 @@ dependencies = [
     "beanquery>=0.2.0",
 ]
 
+[project.optional-dependencies]
+fava = ["fava>=1.30"]
+dev = ["fava>=1.30","pytest>=7.4.4", "flask>=3.1.2"]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+fava_forecast = ["templates/*.html", "templates/**/*.html"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,0 +1,120 @@
+{% set d = extension.data() %}
+
+<div class="section">
+  <h2 style="margin-top:0;">Budget Forecast</h2>
+
+  <div style="color:#666; margin-bottom:12px;">
+    Operating currency: <b>{{ d.operating_currency }}</b>
+    &nbsp;·&nbsp; Today: <b>{{ d.today }}</b>
+    &nbsp;·&nbsp; Until: <b>{{ d.until }}</b>
+  </div>
+
+  <table>
+    <tbody>
+      <tr>
+        <td style="padding:4px 12px; white-space:nowrap;">Assets:</td>
+        <td style="text-align:right; padding:4px 0; font-variant-numeric: tabular-nums;">
+          {{ extension.fmt(d.summary.assets) }} {{ d.operating_currency }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px; white-space:nowrap;">Liabilities:</td>
+        <td style="text-align:right; padding:4px 0; font-variant-numeric: tabular-nums;">
+          {{ extension.fmt(-d.summary.liabs) }} {{ d.operating_currency }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px; white-space:nowrap;">Net now (Assets - Liabilities):</td>
+        <td style="text-align:right; padding:4px 0; font-variant-numeric: tabular-nums;">
+          {{ extension.fmt(d.summary.net_now) }} {{ d.operating_currency }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px; white-space:nowrap;">Planned income in range:</td>
+        <td style="text-align:right; padding:4px 0; font-variant-numeric: tabular-nums;">
+          {{ extension.fmt(d.summary.planned_income) }} {{ d.operating_currency }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px; white-space:nowrap;">Planned expenses in range:</td>
+        <td style="text-align:right; padding:4px 0; font-variant-numeric: tabular-nums;">
+          {{ extension.fmt(d.summary.planned_expenses) }} {{ d.operating_currency }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px; white-space:nowrap;">Planned budget expenses:</td>
+        <td style="text-align:right; padding:4px 0; font-variant-numeric: tabular-nums;">
+          {{ extension.fmt(d.summary.planned_budget_expenses) }} {{ d.operating_currency }}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr/>
+
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div style="font-weight:600;">Forecast end balance:</div>
+    <div style="font-variant-numeric: tabular-nums;">
+      {{ extension.fmt(d.summary.forecast_end) }} {{ d.operating_currency }}
+    </div>
+    {% if d.summary.ok %}
+      <span style="background:#e6ffed;color:#036635;padding:2px 8px;border-radius:10px;">OK</span>
+    {% else %}
+      <span style="background:#ffeef0;color:#86181d;padding:2px 8px;border-radius:10px;">DEFICIT</span>
+    {% endif %}
+  </div>
+
+  {% if d.verbose %}
+  <details style="margin-top:16px;" open>
+    <summary style="cursor:pointer;">Breakdowns</summary>
+
+    {% macro breakdown_table(title, rows) -%}
+      <h4 style="margin:12px 0 6px 0;">{{ title }}</h4>
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:left;padding-right:12px;">CUR</th>
+            <th style="text-align:right;padding-right:12px;">Amount (cur)</th>
+            <th style="text-align:right;padding-right:12px;">Rate</th>
+            <th style="text-align:right;">Converted ({{ d.operating_currency }})</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for cur, amt, rate, conv in rows %}
+          <tr>
+            <td style="padding-right:12px;">{{ cur }}</td>
+            <td style="text-align:right;padding-right:12px; font-variant-numeric: tabular-nums;">
+              {{ extension.fmt(amt) }} {{ cur }}
+            </td>
+            <td style="text-align:right;padding-right:12px; font-variant-numeric: tabular-nums;">
+              {% if rate is not none %}{{ extension.fmt(rate) }}{% else %}—{% endif %}
+            </td>
+            <td style="text-align:right; font-variant-numeric: tabular-nums;">
+              {% if conv is not none %}{{ extension.fmt(conv) }} {{ d.operating_currency }}{% else %}—{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {%- endmacro %}
+
+    {{ breakdown_table("ASSETS breakdown", d.breakdowns.assets) }}
+    {{ breakdown_table("LIABILITIES breakdown", d.breakdowns.liabs) }}
+    {{ breakdown_table("PLANNED INCOME breakdown", d.breakdowns.planned_income) }}
+    {{ breakdown_table("PLANNED EXPENSES breakdown", d.breakdowns.planned_expenses) }}
+    {{ breakdown_table("BUDGETED EXPENSES breakdown (forecast)", d.breakdowns.planned_budget_expenses) }}
+  </details>
+  {% endif %}
+
+  <details style="margin-top:14px;">
+    <summary>Parameters</summary>
+    <pre style="margin-top:8px;white-space:pre-wrap;">
+budgets = {{ d.paths.budgets or "(not set)" }}
+prices  = {{ d.paths.prices or "(not set)" }}
+currency= {{ d.operating_currency }}
+today   = {{ d.today }}
+until   = {{ d.until }}
+verbose = {{ d.verbose }}
+    </pre>
+  </details>
+</div>
