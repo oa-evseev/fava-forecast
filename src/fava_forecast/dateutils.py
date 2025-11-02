@@ -3,23 +3,42 @@ import datetime
 
 
 def count_weeks(start: datetime.date, end: datetime.date) -> int:
+    """
+    Count whole/partial calendar weeks in the half-open interval [start, end).
+    Returns 0 if end <= start.
+    Rounds up any positive number of days to the next week.
+    """
     if end <= start:
         return 0
-    delta = (end - start).days
-    return (delta + 6) // 7  # round up
+    days = (end - start).days
+    return (days + 6) // 7  # ceiling(days/7)
 
 
 def count_months(start: datetime.date, end: datetime.date) -> int:
+    """
+    Count calendar months between the 1st of start's month (inclusive)
+    and the 1st of end's month (exclusive). Effectively the number of month
+    boundaries crossed by any instant in [start, end).
+
+    Examples:
+      start=2025-01-01, end=2025-01-31  -> 0
+      start=2025-01-01, end=2025-02-01  -> 1
+      start=2025-01-15, end=2025-02-14  -> 1
+      start=2024-12-31, end=2025-01-01  -> 1
+    """
     if end <= start:
         return 0
-    m = 0
+
     cur = datetime.date(start.year, start.month, 1)
     endm = datetime.date(end.year, end.month, 1)
-    while cur < endm:
-        m += 1
-        y, mm = cur.year, cur.month
-        mm = 1 if mm == 12 else mm + 1
-        y = y + 1 if mm == 1 and cur.month == 12 else y
-        cur = datetime.date(y, mm, 1)
-    return m
 
+    months = 0
+    while cur < endm:
+        # advance to first day of next month
+        year, mon = cur.year, cur.month
+        if mon == 12:
+            cur = datetime.date(year + 1, 1, 1)
+        else:
+            cur = datetime.date(year, mon + 1, 1)
+        months += 1
+    return months
