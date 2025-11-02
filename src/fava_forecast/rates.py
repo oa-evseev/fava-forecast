@@ -30,7 +30,11 @@ def _parse_price_line(line: str) -> Optional[Tuple[datetime.date, str, Decimal, 
     )
     m = rx.match(line.strip())
     if not m:
+        # if the line looks like a price entry but has an invalid number → raise an error
+        if line.strip().startswith(tuple("0123456789")) and "price" in line:
+            raise PriceParseError(f"Invalid price line: {line}")
         return None
+
     date_str, base, amount_str, quote = m.groups()
     try:
         date = datetime.date.fromisoformat(date_str)
@@ -88,18 +92,12 @@ def load_prices_to_op(
 
             if quote == op_currency:
                 direct.setdefault(base, []).append((date, value))
-            elif quote == "USD":
-                via_usd.setdefault(base, []).append((date, value))
-            elif base == "USD" and quote == op_currency:
+            if base == "USD" and quote == op_currency:
                 usd_to_op.append((date, value))
+            if quote == "USD":
+                via_usd.setdefault(base, []).append((date, value))
 
     result: Dict[str, Decimal] = {op_currency: Decimal("1")}
-
-    # direct conversions
-    for cur, pairs in direct.items():
-        rate = _select_last_rate(pairs, today)
-        if rate is not None:
-            result[cur] = rate
 
     # indirect through USD
     usd_rate = _select_last_rate(usd_to_op, today)
@@ -107,6 +105,12 @@ def load_prices_to_op(
         for cur, pairs in via_usd.items():
             cur_to_usd = _select_last_rate(pairs, today)
             if cur_to_usd is not None:
-                result[cur] = cur_to_usd * usd_rate
+                direct.setdefault(cur, []).append((today, cur_to_usd * usd_rate))
+
+    # compute all conversions
+    for cur, pairs in direct.items():
+        rate = _select_last_rate(pairs, today)
+        if rate is not None:
+            result[cur] = rate
 
     return result

@@ -10,37 +10,58 @@ from fava_forecast.errors import PriceParseError
 # -----------------------------
 # _parse_price_line
 # -----------------------------
-def test_parse_price_line_ok_direct():
-    line = "2025-01-02 price EUR 1.2345 CRC"
+def test_parse_price_line_ok_multi_underscores():
+    line = "2025-03-01 price GOLD 1_234_567.89 CRC"
     d, base, val, quote = r._parse_price_line(line)
-    assert d == dt.date(2025, 1, 2)
-    assert base == "EUR"
-    assert val == Decimal("1.2345")
+    assert d == dt.date(2025, 3, 1)
+    assert base == "GOLD"
+    assert val == Decimal("1234567.89")
     assert quote == "CRC"
 
 
-def test_parse_price_line_ok_underscore():
-    line = "2025-02-10 price BTC 1_234.50 USD"
+def test_parse_price_line_ok_tabs_spaces():
+    line = "2025-03-02\tprice\tEUR\t12_345.00\tCRC"
     d, base, val, quote = r._parse_price_line(line)
-    assert d == dt.date(2025, 2, 10)
-    assert base == "BTC"
-    assert val == Decimal("1234.50")
+    assert d == dt.date(2025, 3, 2)
+    assert base == "EUR"
+    assert val == Decimal("12345.00")
+    assert quote == "CRC"
+
+
+def test_parse_price_line_ok_base_with_digits():
+    line = "2025-03-03 price XBT0 1_000 USD"
+    d, base, val, quote = r._parse_price_line(line)
+    assert d == dt.date(2025, 3, 3)
+    assert base == "XBT0"
+    assert val == Decimal("1000")
     assert quote == "USD"
 
 
-def test_parse_price_line_skip_nonmatch():
-    assert r._parse_price_line("not a price line") is None
+# --- invalid number → raises PriceParseError ---
 
-
-def test_parse_price_line_bad_date_raises():
+def test_parse_price_line_bad_number_underscore_only_raises():
     with pytest.raises(PriceParseError):
-        r._parse_price_line("2025-13-40 price USD 1.00 CRC")
+        r._parse_price_line("2025-04-01 price USD _ CRC")
 
-# TODO: figure out why this one is not raised
-#def test_parse_price_line_bad_number_raises():
-#    # regex matches; decimal fails -> raises
-#    with pytest.raises(PriceParseError):
-#        r._parse_price_line("2025-01-01 price USD X_Y CRC")
+
+def test_parse_price_line_bad_number_letters_raises():
+    with pytest.raises(PriceParseError):
+        r._parse_price_line("2025-04-02 price USD X_Y CRC")
+
+
+def test_parse_price_line_bad_number_dot_only_raises():
+    with pytest.raises(PriceParseError):
+        r._parse_price_line("2025-04-03 price USD . CRC")
+
+
+def test_parse_price_line_bad_number_misplaced_underscore_raises():
+    with pytest.raises(PriceParseError):
+        r._parse_price_line("2025-04-04 price USD 1._23 CRC")
+
+
+def test_parse_price_line_bad_number_multiple_dots_raises():
+    with pytest.raises(PriceParseError):
+        r._parse_price_line("2025-04-05 price USD 1.2.3 CRC")
 
 
 # -----------------------------
@@ -95,26 +116,25 @@ def test_load_prices_direct_and_identity(tmp_path):
     assert "garbage" not in rates
 
 
-# TODO: this one requires code upgrate
-#def test_load_prices_indirect_via_usd(tmp_path):
-#    lines = [
-#        # USD -> CRC
-#        "2025-01-01 price USD 500.00 CRC",
-#        "2025-01-10 price USD 520.00 CRC",  # latest
-#        # BTC -> USD
-#        "2025-01-05 price BTC 2.00 USD",
-#        "2025-01-20 price BTC 3.00 USD",  # beyond today -> ignored
-#        # ETH -> USD (no USD->CRC -> should NOT appear)
-#        "2025-01-07 price ETH 1000.00 USD",
-#    ]
-#    path = _write_prices(tmp_path, lines)
-#    today = dt.date(2025, 1, 15)
-#    rates = r.load_prices_to_op(path, "CRC", today)
-#    # BTC->USD (2.00) * USD->CRC (520) = 1040
-#    assert rates["BTC"] == Decimal("1040")
-#    # ETH must be absent because conversion USD->CRC exists, but ETH->USD exists too;
-#    # However both exist => actually ETH should also be present (2-hop). Verify:
-#    assert rates["ETH"] == Decimal("1000") * Decimal("520")
+def test_load_prices_indirect_via_usd(tmp_path):
+    lines = [
+        # USD -> CRC
+        "2025-01-01 price USD 500.00 CRC",
+        "2025-01-10 price USD 520.00 CRC",  # latest
+        # BTC -> USD
+        "2025-01-05 price BTC 2.00 USD",
+        "2025-01-20 price BTC 3.00 USD",  # beyond today -> ignored
+        # ETH -> USD (no USD->CRC -> should NOT appear)
+        "2025-01-07 price ETH 1000.00 USD",
+    ]
+    path = _write_prices(tmp_path, lines)
+    today = dt.date(2025, 1, 15)
+    rates = r.load_prices_to_op(path, "CRC", today)
+    # BTC->USD (2.00) * USD->CRC (520) = 1040
+    assert rates["BTC"] == Decimal("1040")
+    # ETH must be absent because conversion USD->CRC exists, but ETH->USD exists too;
+    # However both exist => actually ETH should also be present (2-hop). Verify:
+    assert rates["ETH"] == Decimal("1000") * Decimal("520")
 
 
 def test_load_prices_indirect_skipped_if_no_usd_to_op(tmp_path):
