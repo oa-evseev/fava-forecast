@@ -6,10 +6,10 @@
 
 ## Overview
 
-`fava-forecast` analyses Beancount journals and budget files to project your future financial balance.  
+`fava-forecast` analyses Beancount journals and budget files to project your future financial balance.
 It combines current assets, liabilities, planned income, expenses, and recurring budgets to calculate the expected balance by a target date.
 
-You can run it standalone via command line or later integrate it as a [Fava](https://beancount.github.io/fava/) extension.
+You can run it standalone via command line or integrate it as a [Fava](https://beancount.github.io/fava/) extension.
 
 ---
 
@@ -23,7 +23,7 @@ You can run it standalone via command line or later integrate it as a [Fava](htt
 - Supports automatic **currency conversion** using `prices.bean`.
 - Provides detailed per-currency breakdowns (`--verbose`).
 - Works with any operating currency configured in your Beancount file.
-- Modular structure, ready for integration into Fava.
+- Integrated into Fava as a custom report tab.
 
 ---
 
@@ -69,8 +69,34 @@ Net now (Assets - Liabilities):   2 025 600.00 CRC
 Planned income in range:            450 000.00 CRC
 Planned expenses in range:          120 000.00 CRC
 Planned budget expenses:            180 000.00 CRC
-——————————————————————————————————————————————————————
+————————————————————————————————————————————————————————————————————
 Forecast end balance:             2 175 600.00 CRC   [OK ✅]
+```
+
+---
+
+## Fava integration
+
+Add the following line to your main Beancount file:
+
+```beancount
+2025-01-01 custom "fava-extension" "fava_forecast.fava_ext" "currency=CRC"
+```
+
+Then start Fava pointing to your ledger:
+
+```bash
+fava /path/to/main.bean -p 5001
+```
+
+A new tab **Budget Forecast** will appear in the Fava menu.
+
+Default files `budgets.bean` and `prices.bean` are automatically detected in the same directory as your main journal.
+
+You can override parameters in the browser using query strings, for example:
+
+```
+http://127.0.0.1:5001/your-ledger/extension/budget-forecast/?until=2026-06-30&currency=USD
 ```
 
 ---
@@ -79,26 +105,27 @@ Forecast end balance:             2 175 600.00 CRC   [OK ✅]
 
 ```
 src/fava_forecast/
-    beancount_io.py   # bean-query wrappers
-    budgets.py        # budget parsing and forecast logic
-    cli.py            # CLI interface
-    config.py         # constants and currency detection
-    convert.py        # conversions and aggregation
-    dateutils.py      # date helpers
-    formatters.py     # pretty console output
-    fava_ext.py       # placeholder for Fava integration
+    beancount_io.py   # Beancount / BeanQuery I/O helpers
+    budgets.py        # Budget parsing and forecast logic
+    cli.py            # Standalone CLI interface
+    config.py         # Option parsing and currency detection
+    convert.py        # Currency conversions and aggregation
+    dateutils.py      # Date and period helpers
+    formatters.py     # Console and HTML formatters
+    fava_ext.py       # Full Fava extension integration
 ```
 
 ---
 
 ## Planned roadmap
 
-- [ ] Add web interface in Fava (custom report tab)
-- [ ] Interactive charts for balance projection
-- [ ] Support for multiple forecast scenarios
-- [ ] Optional CSV/JSON export
+- [ ] Add configurable parameters via the Fava web UI
+- [ ] Add interactive charts and trend visualisation
+- [ ] Support for multiple forecast profiles (optimistic / base / pessimistic)
+- [ ] Export forecast results as CSV or JSON
+- [ ] Improve caching and performance for large ledgers
 
 ---
 
-© 2025 Oleg Evseev  
+© 2025 Oleg Evseev
 Licensed under the MIT License.
