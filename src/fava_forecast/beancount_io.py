@@ -1,96 +1,91 @@
 # beancount_io.py
+import os
 import re
 import subprocess
 from decimal import Decimal
-from typing import Iterable, List, Tuple
-
-from .errors import BeanQueryError
-
-# Regexes
-_RE_NUMBER = re.compile(r"([-+]?\d[\d_,]*(?:\.\d+)?)")
-_RE_GROUPED_ROW = re.compile(r"^([A-Z]{2,6})\s+([-+]?\d[\d_,]*(?:\.\d+)?)\s+[A-Z]{2,6}$")
-_TABLE_TRASH_CHARS = set("─=|+- ")
+from typing import List, Tuple
 
 
+Row = Tuple[str, Decimal]  # (currency, amount)
+
+
+# ----------------------------------------------------------------
+# Core bean-query runners
+# ----------------------------------------------------------------
 def beanquery_run_lines(journal_path: str, query: str) -> List[str]:
     """
-    Execute bean-query and return non-empty, stripped output lines.
+    Run `bean-query` on the given journal and return all non-empty lines.
+    Raises RuntimeError on failure or parse issues.
     """
+    if not os.path.exists(journal_path):
+        raise FileNotFoundError(f"Journal file not found: {journal_path}")
+
     cmd = ["bean-query", journal_path, query]
-    out = subprocess.check_output(cmd, text=True)
-    return [ln.strip() for ln in out.splitlines() if ln.strip()]
-
-
-def beanquery_last_scalar(lines: Iterable[str]) -> Decimal:
-    """
-    Parse a single numeric scalar from the last non-empty line.
-    """
     try:
-        last = list(lines)[-1]
-    except IndexError:
-        raise BeanQueryError("bean-query returned no lines")
+        output = subprocess.check_output(cmd, text=True)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"bean-query failed: {e}") from e
 
-    m = _RE_NUMBER.search(last)
-    if not m:
-        raise BeanQueryError(f"bean-query parse error: {last}")
-
-    num = m.group(1).replace(",", "").replace("_", "")
-    return Decimal(num)
+    lines = [ln.strip() for ln in output.splitlines() if ln.strip()]
+    return lines
 
 
-def beanquery_table_body(lines: Iterable[str]) -> List[str]:
+def beanquery_table_body(lines: List[str]) -> List[str]:
     """
-    Drop table headers/separators from bean-query tabular output.
+    Strip headers, separators, and totals from bean-query output.
+    Keeps only table body lines with data like:
+      'USD     10.00 USD'
     """
-    body = []
+    if not lines:
+        return []
+
+    body: List[str] = []
     for ln in lines:
-        if set(ln).issubset(_TABLE_TRASH_CHARS):
+        # Skip decorative/separator lines
+        if set(ln).issubset(set("─=|+- ")):
             continue
-        if ln.lower().startswith(("currency", "sum")):
+        # Skip header or summary lines
+        if ln.lower().startswith(("currency", "sum", "total")):
             continue
         body.append(ln)
     return body
 
 
-def beanquery_grouped_amounts(lines: Iterable[str]) -> List[Tuple[str, Decimal]]:
+# ----------------------------------------------------------------
+# Parsing helpers
+# ----------------------------------------------------------------
+def beanquery_grouped_amounts(body_lines: List[str]) -> List[Row]:
     """
-    Parse lines of form:
-      'CURR    364942.23 CURR'
-    Return list of (currency, Decimal amount).
+    Parse grouped currency summary lines (after table cleanup).
+
+    Input example:
+      ['USD     10.00 USD', 'CRC  1_000.00 CRC']
+    Output:
+      [('USD', Decimal('10.00')), ('CRC', Decimal('1000.00'))]
     """
-    out: List[Tuple[str, Decimal]] = []
-    for ln in lines:
-        if ln.lower().startswith("curr"):
-            continue
-        m = _RE_GROUPED_ROW.match(ln)
+    out: List[Row] = []
+    rx = re.compile(r"^([A-Z]{2,6})\s+([-+]?\d[\d_,]*(?:\.\d+)?)\s+[A-Z]{2,6}$")
+
+    for ln in body_lines:
+        m = rx.match(ln.strip())
         if not m:
             continue
-        cur, amount = m.groups()
-        amt = Decimal(amount.replace(",", "").replace("_", ""))
-        out.append((cur, amt))
+        cur, amt = m.groups()
+        amt_dec = Decimal(amt.replace(",", "").replace("_", ""))
+        out.append((cur, amt_dec))
     return out
 
 
-# --- Backwards-compatible helpers (thin wrappers) --------------------------------
-
-def run_bean_query(journal_path: str, query: str) -> Decimal:
+# ----------------------------------------------------------------
+# Combined convenience function
+# ----------------------------------------------------------------
+def beanquery_grouped_amounts_from_journal(journal_path: str, query: str) -> List[Row]:
     """
-    Legacy: execute bean-query and parse a single number from the last line.
+    Run a grouped bean-query and return parsed (currency, amount) pairs.
+
+    Essentially combines:
+      beanquery_run_lines → beanquery_table_body → beanquery_grouped_amounts
     """
     lines = beanquery_run_lines(journal_path, query)
-    return beanquery_last_scalar(lines)
-
-
-def run_bean_query_rows(journal_path: str, query: str):
-    """
-    Legacy: execute bean-query and return cleaned table body (no headers/separators).
-    """
-    lines = beanquery_run_lines(journal_path, query)
-    return beanquery_table_body(lines)
-
-
-def parse_grouped_amounts(lines):
-    """
-    Legacy: wrapper for beanquery_grouped_amounts.
-    """
-    return beanquery_grouped_amounts(lines)
+    body = beanquery_table_body(lines)
+    return beanquery_grouped_amounts(body)
