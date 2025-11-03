@@ -9,6 +9,7 @@ from fava.ext import FavaExtensionBase
 
 from .forecast import run_forecast
 from .formatters import fmt_amount
+from .rates import load_prices_to_op
 
 
 def _parse_config(config: Optional[str]) -> Dict[str, str]:
@@ -62,8 +63,27 @@ class BudgetForecast(FavaExtensionBase):
         default_until = (dt.date.fromisoformat(today) + dt.timedelta(days=14)).isoformat()
         until = until_param or default_until
 
+        today_date = dt.date.fromisoformat(today)
+
+        quick_until = {
+            "1w": (today_date + dt.timedelta(days=7)).isoformat(),
+            "2w": (today_date + dt.timedelta(days=14)).isoformat(),
+            "1m": (today_date + dt.timedelta(days=30)).isoformat(),
+            "3m": (today_date + dt.timedelta(days=90)).isoformat(),
+            "6m": (today_date + dt.timedelta(days=182)).isoformat(),
+            "1y": (today_date + dt.timedelta(days=365)).isoformat(),
+        }
+
         budgets = q.get("budgets", self._cfg.get("budgets", "")) or str(base_dir / "budgets.bean")
         prices  = q.get("prices",  self._cfg.get("prices",  "")) or str(base_dir / "prices.bean")
+
+        # load available currencies from prices file for the selector
+        try:
+            rates_raw = load_prices_to_op(prices, currency_param, dt.date.fromisoformat(today))
+            available_currencies = sorted(rates_raw.keys())
+        except Exception:
+            # if prices missing / broken — fallback to current currency only
+            available_currencies = [currency_param]
 
         # Param-based cache
         cache_key = (str(journal_path), today, until, currency_param, budgets, prices, verbose)
@@ -88,9 +108,11 @@ class BudgetForecast(FavaExtensionBase):
         planned_budget_exp, budg_br = core["planned_budget_exp"]
 
         result = {
+            "currencies": available_currencies,
             "operating_currency": cur,
             "today": core["today"],
             "until": core["until"],
+            "quick_until": quick_until,
             "verbose": verbose,
             "paths": {"budgets": budgets, "prices": prices},
             "summary": {

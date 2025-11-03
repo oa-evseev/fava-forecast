@@ -1,109 +1,228 @@
 {% set d = extension.data() %}
 
-<div class="section">
-  <h2 style="margin-top:0;">Budget Forecast</h2>
+<style>
+  .forecast {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .forecast h2 {
+    margin-top: 0;
+    text-align: center;
+  }
+  .forecast form {
+    margin-bottom: 12px;
+  }
+  .forecast .form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+  }
+  .forecast .form-row label {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .forecast .wide-input {
+    width: 100%;
+  }
+  .forecast .quick-buttons {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .forecast table.summary {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .forecast table.summary td {
+    padding: 4px 12px;
+  }
+  .forecast table.summary td:last-child {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .forecast .footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .forecast .pill-ok {
+    background: #e6ffed;
+    color: #036635;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .forecast .pill-bad {
+    background: #ffeef0;
+    color: #86181d;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .forecast .breakdowns table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .forecast .breakdowns th,
+  .forecast .breakdowns td {
+    padding: 4px 12px 4px 0;
+  }
+  .forecast .breakdowns td:last-child,
+  .forecast .breakdowns th:last-child {
+    text-align: right;
+  }
+  .forecast .breakdowns td {
+    font-variant-numeric: tabular-nums;
+  }
+</style>
 
-  <div style="color:#666; margin-bottom:12px;">
-    Operating currency: <b>{{ d.operating_currency }}</b>
-    &nbsp;·&nbsp; Today: <b>{{ d.today }}</b>
-    &nbsp;·&nbsp; Until: <b>{{ d.until }}</b>
-  </div>
+<div class="forecast">
+  <h2>Budget Forecast</h2>
 
-  <table>
+  <form method="get">
+    <div class="form-row">
+      <label>
+        <span>Currency:</span>
+        <select name="currency" onchange="this.form.submit()">
+          {% for cur in d.currencies %}
+            <option value="{{ cur }}" {% if cur == d.operating_currency %}selected{% endif %}>{{ cur }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label>
+        <span>Today:</span>
+        <input type="date" name="today" value="{{ d.today }}" onchange="this.form.submit()">
+      </label>
+
+      <label>
+        <span>Until:</span>
+
+        <div class="quick-buttons">
+          <button type="submit" name="until" value="{{ d.quick_until['1w'] }}">1w</button>
+          <button type="submit" name="until" value="{{ d.quick_until['2w'] }}">2w</button>
+          <button type="submit" name="until" value="{{ d.quick_until['1m'] }}">1m</button>
+          <button type="submit" name="until" value="{{ d.quick_until['3m'] }}">3m</button>
+          <button type="submit" name="until" value="{{ d.quick_until['6m'] }}">6m</button>
+          <button type="submit" name="until" value="{{ d.quick_until['1y'] }}">1y</button>
+        </div>
+
+        <input type="date" name="until" value="{{ d.until }}" onchange="this.form.submit()">
+      </label>
+
+      <label>
+        <span>Verbose:</span>
+        <input type="checkbox" name="verbose" value="1"
+               {% if d.verbose %}checked{% endif %}
+               onchange="this.form.submit()" style="accent-color:#0a84ff;">
+      </label>
+    </div>
+
+    <div class="form-row" style="justify-content:flex-start;">
+      <input type="text"
+             name="budgets"
+             value="{{ d.paths.budgets }}"
+             placeholder="budgets.bean"
+             class="wide-input"
+             onchange="this.form.submit()">
+    </div>
+    <div class="form-row" style="justify-content:flex-start;">
+      <input type="text"
+             name="prices"
+             value="{{ d.paths.prices }}"
+             placeholder="prices.bean"
+             class="wide-input"
+             onchange="this.form.submit()">
+    </div>
+  </form>
+
+  <table class="summary">
     <tbody>
       <tr>
-        <td style="padding:4px 12px; white-space:nowrap;">Assets:</td>
-        <td style="text-align:right; padding:4px 0; font-variant-numeric: tabular-nums;">
-          {{ extension.fmt(d.summary.assets) }} {{ d.operating_currency }}
-        </td>
+        <td>Assets:</td>
+        <td>{{ extension.fmt(d.summary.assets) }} {{ d.operating_currency }}</td>
       </tr>
       <tr>
-        <td style="padding:4px 12px; white-space:nowrap;">Liabilities:</td>
-        <td style="text-align:right; padding:4px 0; font-variant-numeric: tabular-nums;">
-          {{ extension.fmt(-d.summary.liabs) }} {{ d.operating_currency }}
-        </td>
+        <td>Liabilities:</td>
+        <td>{{ extension.fmt(-d.summary.liabs) }} {{ d.operating_currency }}</td>
       </tr>
       <tr>
-        <td style="padding:4px 12px; white-space:nowrap;">Net now (Assets - Liabilities):</td>
-        <td style="text-align:right; padding:4px 0; font-variant-numeric: tabular-nums;">
-          {{ extension.fmt(d.summary.net_now) }} {{ d.operating_currency }}
-        </td>
+        <td>Net now (Assets - Liabilities):</td>
+        <td>{{ extension.fmt(d.summary.net_now) }} {{ d.operating_currency }}</td>
       </tr>
       <tr>
-        <td style="padding:4px 12px; white-space:nowrap;">Planned income in range:</td>
-        <td style="text-align:right; padding:4px 0; font-variant-numeric: tabular-nums;">
-          {{ extension.fmt(d.summary.planned_income) }} {{ d.operating_currency }}
-        </td>
+        <td>Planned income in range:</td>
+        <td>{{ extension.fmt(d.summary.planned_income) }} {{ d.operating_currency }}</td>
       </tr>
       <tr>
-        <td style="padding:4px 12px; white-space:nowrap;">Planned expenses in range:</td>
-        <td style="text-align:right; padding:4px 0; font-variant-numeric: tabular-nums;">
-          {{ extension.fmt(d.summary.planned_expenses) }} {{ d.operating_currency }}
-        </td>
+        <td>Planned expenses in range:</td>
+        <td>{{ extension.fmt(d.summary.planned_expenses) }} {{ d.operating_currency }}</td>
       </tr>
       <tr>
-        <td style="padding:4px 12px; white-space:nowrap;">Planned budget expenses:</td>
-        <td style="text-align:right; padding:4px 0; font-variant-numeric: tabular-nums;">
-          {{ extension.fmt(d.summary.planned_budget_expenses) }} {{ d.operating_currency }}
-        </td>
+        <td>Planned budget expenses:</td>
+        <td>{{ extension.fmt(d.summary.planned_budget_expenses) }} {{ d.operating_currency }}</td>
       </tr>
     </tbody>
   </table>
 
   <hr/>
 
-  <div style="display:flex;align-items:center;gap:12px;">
+  <div class="footer">
     <div style="font-weight:600;">Forecast end balance:</div>
     <div style="font-variant-numeric: tabular-nums;">
       {{ extension.fmt(d.summary.forecast_end) }} {{ d.operating_currency }}
     </div>
     {% if d.summary.ok %}
-      <span style="background:#e6ffed;color:#036635;padding:2px 8px;border-radius:10px;">OK</span>
+      <span class="pill-ok">OK</span>
     {% else %}
-      <span style="background:#ffeef0;color:#86181d;padding:2px 8px;border-radius:10px;">DEFICIT</span>
+      <span class="pill-bad">DEFICIT</span>
     {% endif %}
   </div>
 
   {% if d.verbose %}
-  <details style="margin-top:16px;" open>
-    <summary style="cursor:pointer;">Breakdowns</summary>
+    <details class="breakdowns" style="margin-top:16px;" open>
+      <summary style="cursor:pointer;">Breakdowns</summary>
 
-    {% macro breakdown_table(title, rows) -%}
-      <h4 style="margin:12px 0 6px 0;">{{ title }}</h4>
-      <table>
-        <thead>
-          <tr>
-            <th style="text-align:left;padding-right:12px;">CUR</th>
-            <th style="text-align:right;padding-right:12px;">Amount (cur)</th>
-            <th style="text-align:right;padding-right:12px;">Rate</th>
-            <th style="text-align:right;">Converted ({{ d.operating_currency }})</th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for cur, amt, rate, conv in rows %}
-          <tr>
-            <td style="padding-right:12px;">{{ cur }}</td>
-            <td style="text-align:right;padding-right:12px; font-variant-numeric: tabular-nums;">
-              {{ extension.fmt(amt) }} {{ cur }}
-            </td>
-            <td style="text-align:right;padding-right:12px; font-variant-numeric: tabular-nums;">
-              {% if rate is not none %}{{ extension.fmt(rate) }}{% else %}—{% endif %}
-            </td>
-            <td style="text-align:right; font-variant-numeric: tabular-nums;">
-              {% if conv is not none %}{{ extension.fmt(conv) }} {{ d.operating_currency }}{% else %}—{% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    {%- endmacro %}
+      {% macro breakdown_table(title, rows) -%}
+        <h4>{{ title }}</h4>
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align:left;">CUR</th>
+              <th style="text-align:right;">Amount (cur)</th>
+              <th style="text-align:right;">Rate</th>
+              <th style="text-align:right;">Converted ({{ d.operating_currency }})</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for cur, amt, rate, conv in rows %}
+            <tr>
+              <td>{{ cur }}</td>
+              <td style="text-align:right;">
+                {{ extension.fmt(amt) }} {{ cur }}
+              </td>
+              <td style="text-align:right;">
+                {% if rate is not none %}{{ extension.fmt(rate) }}{% else %}—{% endif %}
+              </td>
+              <td style="text-align:right;">
+                {% if conv is not none %}{{ extension.fmt(conv) }} {{ d.operating_currency }}{% else %}—{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      {%- endmacro %}
 
-    {{ breakdown_table("ASSETS breakdown", d.breakdowns.assets) }}
-    {{ breakdown_table("LIABILITIES breakdown", d.breakdowns.liabs) }}
-    {{ breakdown_table("PLANNED INCOME breakdown", d.breakdowns.planned_income) }}
-    {{ breakdown_table("PLANNED EXPENSES breakdown", d.breakdowns.planned_expenses) }}
-    {{ breakdown_table("BUDGETED EXPENSES breakdown (forecast)", d.breakdowns.planned_budget_expenses) }}
-  </details>
+      {{ breakdown_table("ASSETS breakdown", d.breakdowns.assets) }}
+      {{ breakdown_table("LIABILITIES breakdown", d.breakdowns.liabs) }}
+      {{ breakdown_table("PLANNED INCOME breakdown", d.breakdowns.planned_income) }}
+      {{ breakdown_table("PLANNED EXPENSES breakdown", d.breakdowns.planned_expenses) }}
+      {{ breakdown_table("BUDGETED EXPENSES breakdown (forecast)", d.breakdowns.planned_budget_expenses) }}
+    </details>
   {% endif %}
 
   <details style="margin-top:14px;">
