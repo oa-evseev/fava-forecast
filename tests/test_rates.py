@@ -1,3 +1,4 @@
+# test_rates.py
 import datetime as dt
 from decimal import Decimal
 import os
@@ -120,21 +121,22 @@ def test_load_prices_indirect_via_usd(tmp_path):
     lines = [
         # USD -> CRC
         "2025-01-01 price USD 500.00 CRC",
-        "2025-01-10 price USD 520.00 CRC",  # latest
+        "2025-01-10 price USD 520.00 CRC",  # latest <= today
         # BTC -> USD
         "2025-01-05 price BTC 2.00 USD",
         "2025-01-20 price BTC 3.00 USD",  # beyond today -> ignored
-        # ETH -> USD (no USD->CRC -> should NOT appear)
-        "2025-01-07 price ETH 1000.00 USD",
+        # ETH -> BTC (must NOT be picked: USD is the only allowed bridge)
+        "2025-01-07 price ETH 1000.00 BTC",
     ]
     path = _write_prices(tmp_path, lines)
     today = dt.date(2025, 1, 15)
     rates = r.load_prices_to_op(path, "CRC", today)
-    # BTC->USD (2.00) * USD->CRC (520) = 1040
-    assert rates["BTC"] == Decimal("1040")
-    # ETH must be absent because conversion USD->CRC exists, but ETH->USD exists too;
-    # However both exist => actually ETH should also be present (2-hop). Verify:
-    assert rates["ETH"] == Decimal("1000") * Decimal("520")
+
+    # BTC -> USD (2.00) * USD -> CRC (520) = 1040
+    assert rates["BTC"] == Decimal("520") * Decimal("2")
+
+    # ETH should not appear: we do not support ETH -> BTC -> USD -> CRC
+    assert "ETH" not in rates
 
 
 def test_load_prices_indirect_skipped_if_no_usd_to_op(tmp_path):
@@ -161,3 +163,20 @@ def test_load_prices_prefers_latest_leq_today(tmp_path):
     rates = r.load_prices_to_op(path, "CRC", today)
     assert rates["USD"] == Decimal("500.00")
     assert rates["EUR"] == Decimal("600.00")
+
+def test_load_prices_reverse_common_quote_skip_double_cross(tmp_path):
+    lines = [
+        # Common quote in CRC
+        "2025-01-01 price USD 500.00 CRC",        # 1 USD = 500 CRC
+        "2025-01-01 price BTC 100000.00 CRC",     # 1 BTC = 100000 CRC → 100000 / 500 = 200 USD
+        # This would require a double cross (ETH -> BTC -> CRC -> USD) and must be ignored
+        "2025-01-02 price ETH 1000.00 BTC",
+    ]
+    path = _write_prices(tmp_path, lines)
+    today = dt.date(2025, 1, 10)
+
+    rates = r.load_prices_to_op(path, "USD", today)
+
+    assert rates["USD"] == Decimal("1")
+    assert rates["BTC"] == Decimal("200")
+    assert "ETH" not in rates

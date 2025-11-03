@@ -80,8 +80,7 @@ def load_prices_to_op(
         return {}
 
     direct: RatesDict = {}
-    via_usd: RatesDict = {}
-    usd_to_op: RatePairs = []
+    parsed_lines = []
 
     with open(prices_path, "r", encoding="utf-8") as f:
         for line in f:
@@ -89,25 +88,44 @@ def load_prices_to_op(
             if not parsed:
                 continue
             date, base, value, quote = parsed
+            parsed_lines.append((date, base, value, quote))
 
+            # ----------------------------------------------------------------
+            # Direct: XXX -> op_currency
+            # ----------------------------------------------------------------
             if quote == op_currency:
                 direct.setdefault(base, []).append((date, value))
-            if base == "USD" and quote == op_currency:
-                usd_to_op.append((date, value))
-            if quote == "USD":
-                via_usd.setdefault(base, []).append((date, value))
 
-    result: Dict[str, Decimal] = {op_currency: Decimal("1")}
+            # ----------------------------------------------------------------
+            # Inverse: op_currency -> YYY  → store YYY -> op_currency as 1/value
+            # ----------------------------------------------------------------
+            elif base == op_currency and value != 0:
+                inv = Decimal("1") / value
+                direct.setdefault(quote, []).append((date, inv))
 
-    # indirect through USD
-    usd_rate = _select_last_rate(usd_to_op, today)
-    if usd_rate is not None:
-        for cur, pairs in via_usd.items():
-            cur_to_usd = _select_last_rate(pairs, today)
-            if cur_to_usd is not None:
-                direct.setdefault(cur, []).append((today, cur_to_usd * usd_rate))
+    known_quotes = set(direct.keys())
+
+    # ----------------------------------------------------------------
+    # One-hop crosses: base -> quote -> op_currency
+    # ----------------------------------------------------------------
+    for date, base, value, quote in parsed_lines:
+        if base == op_currency:
+            continue
+        if base in direct:
+            continue  # already have direct rate
+        # do we have quote -> op?
+        if quote not in known_quotes:
+            continue
+        quote_pairs = direct.get(quote)
+        quote_rate = _select_last_rate(quote_pairs, today)
+        if quote_rate is None:
+            continue
+        # store derived base -> op at "today"
+        derived = value * quote_rate
+        direct.setdefault(base, []).append((today, derived))
 
     # compute all conversions
+    result: Dict[str, Decimal] = {op_currency: Decimal("1")}
     for cur, pairs in direct.items():
         rate = _select_last_rate(pairs, today)
         if rate is not None:
