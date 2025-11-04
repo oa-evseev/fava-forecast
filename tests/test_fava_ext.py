@@ -294,3 +294,73 @@ def test_future_query_overrides_config(tmp_path, monkeypatch):
 
     assert captured["future_journal"] == "/q/future.bean"
     assert data["paths"]["future"] == "/q/future.bean"
+
+def test_accounts_default_path_from_journal(tmp_path, monkeypatch):
+    base = tmp_path / "ledger_acc"
+    base.mkdir()
+    jpath = base / "main.bean"
+    jpath.write_text("", encoding="utf-8")
+
+    captured = {}
+
+    def fake_run_forecast(**kwargs):
+        captured.update(kwargs)
+        return _mk_core_result()
+
+    monkeypatch.setattr(fx, "run_forecast", fake_run_forecast)
+
+    app = Flask(__name__)
+    ext = fx.BudgetForecast(_LedgerStub(str(jpath)), config=None)
+
+    with app.test_request_context("/extension/budget-forecast/"):
+        data = ext.data()
+
+    assert Path(captured["accounts"]) == base / "accounts.bean"
+    assert data["paths"]["accounts"].endswith("accounts.bean")
+
+def test_accounts_from_config(tmp_path, monkeypatch):
+    base = tmp_path / "ledger_acc2"
+    base.mkdir()
+    (base / "main.bean").write_text("", encoding="utf-8")
+
+    captured = {}
+
+    def fake_run_forecast(**kwargs):
+        captured.update(kwargs)
+        return _mk_core_result()
+
+    monkeypatch.setattr(fx, "run_forecast", fake_run_forecast)
+
+    app = Flask(__name__)
+    ext = fx.BudgetForecast(
+        _LedgerStub(str(base / "main.bean")),
+        config="accounts=/cfg/accounts.bean",
+    )
+
+    with app.test_request_context("/extension/budget-forecast/"):
+        data = ext.data()
+
+    assert captured["accounts"] == "/cfg/accounts.bean"
+    assert data["paths"]["accounts"] == "/cfg/accounts.bean"
+
+def test_messages_passed_through(tmp_path, monkeypatch):
+    base = tmp_path / "ledger_acc3"
+    base.mkdir()
+    (base / "main.bean").write_text("", encoding="utf-8")
+
+    def fake_run_forecast(**kwargs):
+        res = _mk_core_result()
+        res["messages"] = [
+            {"level": "warning", "code": "future-missing-accounts", "text": "…"}
+        ]
+        return res
+
+    monkeypatch.setattr(fx, "run_forecast", fake_run_forecast)
+
+    app = Flask(__name__)
+    ext = fx.BudgetForecast(_LedgerStub(str(base / "main.bean")))
+
+    with app.test_request_context("/extension/budget-forecast/"):
+        data = ext.data()
+
+    assert data["messages"][0]["code"] == "future-missing-accounts"

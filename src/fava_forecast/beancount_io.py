@@ -12,22 +12,21 @@ Row = Tuple[str, Decimal]  # (currency, amount)
 # ----------------------------------------------------------------
 # Core bean-query runners
 # ----------------------------------------------------------------
-def beanquery_run_lines(journal_path: str, query: str) -> List[str]:
+def beanquery_run_lines(journal_path: str, query: str) -> tuple[List[str], List[str]]:
     """
-    Run `bean-query` on the given journal and return all non-empty lines.
-    Raises RuntimeError on failure or parse issues.
+    Run `bean-query` on the given journal and return (lines, warnings).
     """
     if not os.path.exists(journal_path):
         raise FileNotFoundError(f"Journal file not found: {journal_path}")
 
     cmd = ["bean-query", journal_path, query]
-    try:
-        output = subprocess.check_output(cmd, text=True)
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"bean-query failed: {e}") from e
+    proc = subprocess.run(cmd, text=True, capture_output=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"bean-query failed: {proc.stderr.strip() or proc.stdout.strip()}")
 
-    lines = [ln.strip() for ln in output.splitlines() if ln.strip()]
-    return lines
+    lines = [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
+    warns = [ln.strip() for ln in proc.stderr.splitlines() if ln.strip()]
+    return lines, warns
 
 
 def beanquery_table_body(lines: List[str]) -> List[str]:
@@ -86,6 +85,6 @@ def beanquery_grouped_amounts_from_journal(journal_path: str, query: str) -> Lis
     Essentially combines:
       beanquery_run_lines → beanquery_table_body → beanquery_grouped_amounts
     """
-    lines = beanquery_run_lines(journal_path, query)
+    lines, _warns = beanquery_run_lines(journal_path, query)
     body = beanquery_table_body(lines)
     return beanquery_grouped_amounts(body)

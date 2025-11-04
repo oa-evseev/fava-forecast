@@ -17,6 +17,7 @@ def main():
     ap.add_argument("--until", required=True, help="Salary date YYYY-MM-DD (exclusive)")
     ap.add_argument("--today", default=None, help="Override today YYYY-MM-DD (optional)")
     ap.add_argument("--future", default=None, help="Path to future.bean")
+    ap.add_argument("--accounts", default=None, help="Path to accounts.bean (required to use --future)")
     ap.add_argument("--currency", default="CRC", help="Override operating currency (default: 'CRC')")
     ap.add_argument("--verbose", action="store_true", help="Print per-currency breakdowns")
     args = ap.parse_args()
@@ -42,7 +43,17 @@ def main():
         currency=args.currency,
         verbose=args.verbose,
         future_journal=args.future,
+        accounts=args.accounts,
     )
+
+    for msg in data.get("messages", []):
+        lvl = msg.get("level", "info").upper()
+        code = msg.get("code", "")
+        text = msg.get("text", "")
+        if code:
+            print(f"[{lvl}] {code}: {text}")
+        else:
+            print(f"[{lvl}] {text}")
 
     if data.get("past_future"):
         print("\nWARNING: the following planned entries are in the past, move them to your main ledger:")

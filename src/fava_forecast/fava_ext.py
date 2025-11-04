@@ -77,6 +77,7 @@ class BudgetForecast(FavaExtensionBase):
         budgets = q.get("budgets", self._cfg.get("budgets", "")) or str(base_dir / "budgets.bean")
         prices  = q.get("prices",  self._cfg.get("prices",  "")) or str(base_dir / "prices.bean")
         future = q.get("future", self._cfg.get("future", "")) or str(base_dir / "future.bean")
+        accounts = q.get("accounts", self._cfg.get("accounts", "")) or str(base_dir / "accounts.bean")
 
         # load available currencies from prices file for the selector
         try:
@@ -95,6 +96,7 @@ class BudgetForecast(FavaExtensionBase):
             budgets,
             prices,
             future,
+            accounts,
             verbose,
         )
         if getattr(self, "_cache_key", None) == cache_key and getattr(self, "_cache_data", None) is not None:
@@ -109,6 +111,7 @@ class BudgetForecast(FavaExtensionBase):
             currency=currency_param,
             verbose=verbose,
             future_journal=str(future),
+            accounts=str(accounts),
         )
 
         cur = core["op_currency"]
@@ -126,8 +129,9 @@ class BudgetForecast(FavaExtensionBase):
             "until": core["until"],
             "quick_until": quick_until,
             "verbose": verbose,
-            "paths": {"budgets": budgets, "prices": prices, "future": future},
+            "paths": {"budgets": budgets, "prices": prices, "future": future, "accounts": accounts},
             "past_future": past_future,
+            "messages": core.get("messages", []),
             "summary": {
                 "assets": assets_total,
                 "liabs": liabs_total,

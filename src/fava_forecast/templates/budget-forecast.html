@@ -5,6 +5,36 @@
     max-width: 1100px;
     margin: 0 auto;
   }
+
+  .forecast .messages {
+    margin-bottom: 12px;
+  }
+  .forecast .msg {
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+  }
+  .forecast .msg-warning {
+    background: #fff7e0;
+    border: 1px solid #f6c453;
+    color: #5a3d00;
+  }
+  .forecast .msg-info {
+    background: #e9f3ff;
+    border: 1px solid #7cb3ff;
+    color: #003366;
+  }
+  .forecast .msg-error {
+    background: #ffe7e7;
+    border: 1px solid #ff9a9a;
+    color: #660000;
+  }
+  .forecast .msg small {
+    opacity: 0.6;
+    margin-left: 6px;
+  }
+
   .forecast h2 {
     margin-top: 0;
     text-align: center;
@@ -69,7 +99,7 @@
   }
   .forecast .breakdowns th,
   .forecast .breakdowns td {
-    padding: 4px 12px 4px 0;
+    padding: 4px 12px;
   }
   .forecast .breakdowns td:last-child,
   .forecast .breakdowns th:last-child {
@@ -82,6 +112,18 @@
 
 <div class="forecast">
   <h2>Budget Forecast</h2>
+
+  {% if d.messages %}
+    <div class="messages">
+      {% for m in d.messages %}
+        {% set lvl = m.level or "info" %}
+        <div class="msg msg-{{ lvl }}">
+          {{ m.text }}
+          {% if m.code %}<small>({{ m.code }})</small>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
 
   <form method="get">
     <div class="form-row">
@@ -135,6 +177,14 @@
              name="prices"
              value="{{ d.paths.prices }}"
              placeholder="prices.bean"
+             class="wide-input"
+             onchange="this.form.submit()">
+    </div>
+    <div class="form-row" style="justify-content:flex-start;">
+      <input type="text"
+             name="accounts"
+             value="{{ d.paths.accounts }}"
+             placeholder="accounts.bean"
              class="wide-input"
              onchange="this.form.submit()">
     </div>
@@ -230,10 +280,21 @@
     <pre style="margin-top:8px;white-space:pre-wrap;">
 budgets = {{ d.paths.budgets or "(not set)" }}
 prices  = {{ d.paths.prices or "(not set)" }}
+accounts= {{ d.paths.accounts or "(not set)" }}
 currency= {{ d.operating_currency }}
 today   = {{ d.today }}
 until   = {{ d.until }}
 verbose = {{ d.verbose }}
     </pre>
   </details>
+  {% if d.past_future %}
+    <details style="margin-top:14px;">
+      <summary>Past planned entries (from future.bean)</summary>
+      <pre style="margin-top:8px; white-space: pre-wrap; line-height:1.3;">
+{% for line in d.past_future -%}
+{{ line }}
+{% endfor %}
+      </pre>
+    </details>
+  {% endif %}
 </div>

@@ -13,7 +13,7 @@ def test_run_forecast_minimal(monkeypatch, tmp_path):
     monkeypatch.setattr(fc, "detect_operating_currency_from_journal", lambda *_, **__: "CRC")
     monkeypatch.setattr(fc, "load_prices_to_op", lambda *_: {"CRC": Decimal("1")})
 
-    def fake_run_grouped_rows(_j, q):
+    def fake_run_grouped_rows(_j, q, messages=None):
         if "^Assets" in q:
             return [("CRC", Decimal("100"))]
         if "^Liabilities" in q:
@@ -61,7 +61,7 @@ def test_run_forecast_multicurrency(monkeypatch, tmp_path):
     # Conversion rates: 1 USD = 500 CRC, 1 EUR = 600 CRC
     monkeypatch.setattr(fc, "load_prices_to_op", lambda *_: {"CRC": Decimal("1"), "USD": Decimal("500"), "EUR": Decimal("600")})
 
-    def fake_run_grouped_rows(_j, q):
+    def fake_run_grouped_rows(_j, q, messages=None):
         if "^Assets" in q:
             return [("CRC", Decimal("100")), ("USD", Decimal("1"))]     # 100 + 1×500 = 600
         if "^Liabilities" in q:
@@ -102,16 +102,17 @@ def test_run_forecast_multicurrency(monkeypatch, tmp_path):
 def test_run_forecast_with_future_file(monkeypatch, tmp_path):
     main_journal = tmp_path / "main.bean"
     future_journal = tmp_path / "future.bean"
+    accounts = tmp_path / "accounts.bean"
     budgets = tmp_path / "budgets.bean"
     prices = tmp_path / "prices.bean"
-    for f in (main_journal, future_journal, budgets, prices):
+    for f in (main_journal, future_journal, accounts, budgets, prices):
         f.write_text("", encoding="utf-8")
 
     monkeypatch.setattr(fc, "detect_operating_currency_from_journal", lambda *_, **__: "CRC")
     monkeypatch.setattr(fc, "load_prices_to_op", lambda *_: {"CRC": Decimal("1")})
 
     # main ledger provides base assets/liabilities
-    def fake_run_grouped_rows(journal_path, q):
+    def fake_run_grouped_rows(journal_path, q, messages=None):
         if journal_path == str(main_journal):
             if "^Assets" in q:
                 return [("CRC", Decimal("100"))]
@@ -132,6 +133,8 @@ def test_run_forecast_with_future_file(monkeypatch, tmp_path):
         "compute_budget_planned_expenses",
         lambda *_: (Decimal("5"), [("CRC", Decimal("5"), Decimal("1"), Decimal("5"))]),
     )
+    monkeypatch.setattr(fc, "_build_enriched_future", lambda _f, _a: str(future_journal))
+
 
     data = fc.run_forecast(
         journal=str(main_journal),
@@ -141,6 +144,7 @@ def test_run_forecast_with_future_file(monkeypatch, tmp_path):
         today="2025-01-10",
         currency="CRC",
         future_journal=str(future_journal),
+        accounts=str(accounts),
     )
 
     # Reference calculation:
@@ -156,6 +160,7 @@ def test_run_forecast_with_future_file(monkeypatch, tmp_path):
 def test_run_forecast_future_past_entries(monkeypatch, tmp_path):
     main_journal = tmp_path / "main.bean"
     future_journal = tmp_path / "future.bean"
+    accounts = tmp_path / "accounts.bean"
     budgets = tmp_path / "budgets.bean"
     prices = tmp_path / "prices.bean"
     for f in (main_journal, future_journal, budgets, prices):
@@ -180,6 +185,8 @@ def test_run_forecast_future_past_entries(monkeypatch, tmp_path):
         ],
     )
 
+    monkeypatch.setattr(fc, "_build_enriched_future", lambda _f, _a: str(future_journal))
+
     data = fc.run_forecast(
         journal=str(main_journal),
         budgets=str(budgets),
@@ -188,7 +195,9 @@ def test_run_forecast_future_past_entries(monkeypatch, tmp_path):
         today="2025-01-10",
         currency="CRC",
         future_journal=str(future_journal),
+        accounts=str(accounts),
     )
 
-    # Once the implementation provides it, check that past entries are detected
+    # Сheck that past entries are detected
     assert data["past_future"]
+    assert any(m["code"] == "future-past-entries" for m in data["messages"])

@@ -22,7 +22,7 @@ def test_cli_main_summary(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(forecast, "load_prices_to_op", lambda *_: {"CRC": Decimal("1"), "USD": Decimal("500")})
     monkeypatch.setattr(forecast, "detect_operating_currency_from_journal", lambda *_, **__: "CRC")
 
-    def fake_run_grouped_rows(_journal, query):
+    def fake_run_grouped_rows(_journal, query, messages=None):
         if "^Assets" in query:
             return [("CRC", Decimal("2000")), ("USD", Decimal("2"))]
         if "^Liabilities" in query:
@@ -83,7 +83,7 @@ def test_cli_main_verbose(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(forecast, "load_prices_to_op", lambda *_: {"CRC": Decimal("1"), "USD": Decimal("500")})
     monkeypatch.setattr(forecast, "detect_operating_currency_from_journal", lambda *_, **__: "CRC")
 
-    def fake_run_grouped_rows(_journal, query):
+    def fake_run_grouped_rows(_journal, query, messages=None):
         if "^Assets" in query:
             return [("USD", Decimal("1"))]  # -> 500
         if "^Liabilities" in query:
@@ -210,3 +210,97 @@ def test_cli_main_with_future_no_warning(monkeypatch, capsys, tmp_path):
 
     assert "WARNING: the following planned entries are in the past" not in out
 
+def test_cli_prints_messages(monkeypatch, capsys, tmp_path):
+    j = tmp_path / "main.bean"
+    b = tmp_path / "budgets.bean"
+    p = tmp_path / "prices.bean"
+    for f in (j, b, p):
+        f.write_text("", encoding="utf-8")
+
+    def fake_run_forecast(**kwargs):
+        return {
+            "op_currency": "CRC",
+            "assets": (Decimal("0"), []),
+            "liabs": (Decimal("0"), []),
+            "planned_income": (Decimal("0"), []),
+            "planned_expenses": (Decimal("0"), []),
+            "planned_budget_exp": (Decimal("0"), []),
+            "net_now": Decimal("0"),
+            "forecast_end": Decimal("0"),
+            "ok": True,
+            "verbose": False,
+            "past_future": [],
+            "messages": [
+                {
+                    "level": "warning",
+                    "code": "future-missing-accounts",
+                    "text": "Future journal was provided but accounts file is missing; skipped.",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(cli, "run_forecast", fake_run_forecast)
+    monkeypatch.setattr(cli, "detect_operating_currency_from_journal", lambda *_, **__: "CRC")
+    monkeypatch.setattr(cli, "load_prices_to_op", lambda *_: {"CRC": Decimal("1")})
+
+    out = _run_main_with_args(
+        [
+            "--journal", str(j),
+            "--budgets", str(b),
+            "--prices", str(p),
+            "--until", "2025-01-20",
+            "--today", "2025-01-10",
+            "--future", str(tmp_path / "future.bean"),
+        ],
+        monkeypatch,
+        capsys,
+    )
+
+    assert "[WARNING] future-missing-accounts:" in out
+
+def test_cli_passes_accounts(monkeypatch, capsys, tmp_path):
+    j = tmp_path / "main.bean"
+    b = tmp_path / "budgets.bean"
+    p = tmp_path / "prices.bean"
+    a = tmp_path / "accounts.bean"
+    for f in (j, b, p, a):
+        f.write_text("", encoding="utf-8")
+
+    captured = {}
+
+    def fake_run_forecast(**kwargs):
+        captured.update(kwargs)
+        return {
+            "op_currency": "CRC",
+            "assets": (Decimal("0"), []),
+            "liabs": (Decimal("0"), []),
+            "planned_income": (Decimal("0"), []),
+            "planned_expenses": (Decimal("0"), []),
+            "planned_budget_exp": (Decimal("0"), []),
+            "net_now": Decimal("0"),
+            "forecast_end": Decimal("0"),
+            "ok": True,
+            "verbose": False,
+            "past_future": [],
+            "messages": [],
+        }
+
+    monkeypatch.setattr(cli, "run_forecast", fake_run_forecast)
+    monkeypatch.setattr(cli, "detect_operating_currency_from_journal", lambda *_, **__: "CRC")
+    monkeypatch.setattr(cli, "load_prices_to_op", lambda *_: {"CRC": Decimal("1")})
+
+    _run_main_with_args(
+        [
+            "--journal", str(j),
+            "--budgets", str(b),
+            "--prices", str(p),
+            "--until", "2025-01-20",
+            "--today", "2025-01-10",
+            "--future", str(tmp_path / "future.bean"),
+            "--accounts", str(a),
+        ],
+        monkeypatch,
+        capsys,
+    )
+
+    assert captured["accounts"] == str(a)
