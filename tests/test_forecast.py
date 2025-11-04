@@ -180,9 +180,10 @@ def test_run_forecast_future_past_entries(monkeypatch, tmp_path):
     monkeypatch.setattr(
         fc,
         "beanquery_run_lines",
-        lambda *_: [
-            "2025-01-05 * \"Planned rent\" \"\"",
-        ],
+        lambda *_: (
+            ["2025-01-05 * \"Planned rent\" \"\""],
+            [],
+        ),
     )
 
     monkeypatch.setattr(fc, "_build_enriched_future", lambda _f, _a: str(future_journal))

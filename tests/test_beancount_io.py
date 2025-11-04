@@ -1,6 +1,7 @@
 import os
 import pytest
 from decimal import Decimal
+from types import SimpleNamespace
 
 import fava_forecast.beancount_io as io
 
@@ -13,10 +14,18 @@ def test_run_lines_ok_trims_and_filters(monkeypatch, tmp_path):
     j.write_text("", encoding="utf-8")
 
     out = "\n  Currency  Sum  \n\nUSD 10.00 USD\n  \nCRC  1_000.00 CRC\n"
-    monkeypatch.setattr(io.subprocess, "check_output", lambda cmd, text=True: out)
-
-    lines = io.beanquery_run_lines(str(j), "SELECT 1")
+    monkeypatch.setattr(
+        io.subprocess,
+        "run",
+        lambda cmd, text=True, capture_output=True: SimpleNamespace(
+            returncode=0,
+            stdout=out,
+            stderr="",
+        ),
+    )
+    lines, warns = io.beanquery_run_lines(str(j), "SELECT 1")
     assert lines == ["Currency  Sum", "USD 10.00 USD", "CRC  1_000.00 CRC"]
+    assert warns == []
 
 
 def test_run_lines_missing_journal_raises():
@@ -94,7 +103,15 @@ def test_grouped_amounts_from_journal_pipeline(monkeypatch, tmp_path):
             "sum total",
         ]
     )
-    monkeypatch.setattr(io.subprocess, "check_output", lambda cmd, text=True: fake)
+    monkeypatch.setattr(
+        io.subprocess,
+        "run",
+        lambda cmd, text=True, capture_output=True: SimpleNamespace(
+            returncode=0,
+            stdout=fake,
+            stderr="",
+        ),
+    )
 
     rows = io.beanquery_grouped_amounts_from_journal(str(j), "SELECT currency, sum(position) GROUP BY currency")
     assert rows == [("USD", Decimal("10.00")), ("CRC", Decimal("1000.00"))]
