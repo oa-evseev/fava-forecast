@@ -101,6 +101,14 @@ http://127.0.0.1:5001/your-ledger/extension/budget-forecast/?until=2026-06-30&cu
 
 ---
 
+## Additional features
+
+- Displays **BeanQuery warnings and errors** directly in Fava under the forecast table.
+- Detects **planned entries in the past** from `future.bean` and lists them for review.
+- Works seamlessly with an optional `accounts.bean` file to ensure all accounts are resolved.
+
+---
+
 ## Project structure
 
 ```
@@ -119,7 +127,7 @@ src/fava_forecast/
 
 ## Planned roadmap
 
-- [ ] Add configurable parameters via the Fava web UI
+- [x] Add configurable parameters via the Fava web UI
 - [ ] Add interactive charts and trend visualisation
 - [ ] Support for multiple forecast profiles (optimistic / base / pessimistic)
 - [ ] Export forecast results as CSV or JSON
