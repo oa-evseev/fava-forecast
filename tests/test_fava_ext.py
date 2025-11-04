@@ -43,6 +43,7 @@ def _mk_core_result(
         "forecast_end": assets_total + liabs_total + inc - (exp + budg),
         "ok": True,
         "verbose": False,
+        "past_future": [],
     }
 
 
@@ -217,3 +218,79 @@ def test_query_overrides_config(tmp_path, monkeypatch):
     assert captured["today"] == "2026-01-02"
     assert captured["until"] == "2026-01-15"
     assert data["operating_currency"] == "USD"
+
+
+def test_future_default_path_from_journal(tmp_path, monkeypatch):
+    base = tmp_path / "ledger"
+    base.mkdir()
+    jpath = base / "main.bean"
+    jpath.write_text("", encoding="utf-8")
+
+    captured = {}
+
+    def fake_run_forecast(**kwargs):
+        captured.update(kwargs)
+        return _mk_core_result()
+
+    monkeypatch.setattr(fx, "run_forecast", fake_run_forecast)
+
+    app = Flask(__name__)
+    ext = fx.BudgetForecast(_LedgerStub(str(jpath)), config=None)
+
+    with app.test_request_context("/extension/budget-forecast/"):
+        data = ext.data()
+
+    assert Path(captured["future_journal"]) == base / "future.bean"
+    assert data["paths"]["future"].endswith("future.bean")
+
+
+def test_future_from_config(tmp_path, monkeypatch):
+    base = tmp_path / "ledger2"
+    base.mkdir()
+    (base / "main.bean").write_text("", encoding="utf-8")
+
+    captured = {}
+
+    def fake_run_forecast(**kwargs):
+        captured.update(kwargs)
+        return _mk_core_result()
+
+    monkeypatch.setattr(fx, "run_forecast", fake_run_forecast)
+
+    app = Flask(__name__)
+    ext = fx.BudgetForecast(
+        _LedgerStub(str(base / "main.bean")),
+        config="future=/cfg/future.bean, currency=CRC",
+    )
+
+    with app.test_request_context("/extension/budget-forecast/"):
+        data = ext.data()
+
+    assert captured["future_journal"] == "/cfg/future.bean"
+    assert data["paths"]["future"] == "/cfg/future.bean"
+
+
+def test_future_query_overrides_config(tmp_path, monkeypatch):
+    base = tmp_path / "ledger3"
+    base.mkdir()
+    (base / "main.bean").write_text("", encoding="utf-8")
+
+    captured = {}
+
+    def fake_run_forecast(**kwargs):
+        captured.update(kwargs)
+        return _mk_core_result()
+
+    monkeypatch.setattr(fx, "run_forecast", fake_run_forecast)
+
+    app = Flask(__name__)
+    ext = fx.BudgetForecast(
+        _LedgerStub(str(base / "main.bean")),
+        config="future=/cfg/future.bean",
+    )
+
+    with app.test_request_context("/extension/budget-forecast/?future=/q/future.bean"):
+        data = ext.data()
+
+    assert captured["future_journal"] == "/q/future.bean"
+    assert data["paths"]["future"] == "/q/future.bean"

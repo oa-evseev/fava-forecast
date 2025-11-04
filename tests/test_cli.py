@@ -124,3 +124,89 @@ def test_cli_main_verbose(monkeypatch, capsys, tmp_path):
     assert "Net now (Assets - Liabilities):" in out and "450.00 CRC" in out
     assert "Forecast end balance:" in out and "650.00 CRC" in out
 
+
+def test_cli_main_with_future_warning(monkeypatch, capsys, tmp_path):
+    j = tmp_path / "main.bean"
+    b = tmp_path / "budgets.bean"
+    p = tmp_path / "prices.bean"
+    for f in (j, b, p):
+        f.write_text("", encoding="utf-8")
+
+    # mock run_forecast to ensure CLI prints past_future block
+    def fake_run_forecast(**kwargs):
+        return {
+            "op_currency": "CRC",
+            "assets": (Decimal("100"), []),
+            "liabs": (Decimal("0"), []),
+            "planned_income": (Decimal("0"), []),
+            "planned_expenses": (Decimal("0"), []),
+            "planned_budget_exp": (Decimal("0"), []),
+            "net_now": Decimal("100"),
+            "forecast_end": Decimal("100"),
+            "ok": True,
+            "verbose": False,
+            "past_future": ["2025-01-05 * \"Planned rent\" \"\""],
+        }
+
+    monkeypatch.setattr(cli, "run_forecast", fake_run_forecast)
+    monkeypatch.setattr(cli, "detect_operating_currency_from_journal", lambda *_, **__: "CRC")
+    monkeypatch.setattr(cli, "load_prices_to_op", lambda *_: {"CRC": Decimal("1")})
+
+    out = _run_main_with_args(
+        [
+            "--journal", str(j),
+            "--budgets", str(b),
+            "--prices", str(p),
+            "--until", "2025-01-20",
+            "--today", "2025-01-10",
+            "--future", str(tmp_path / "future.bean"),
+        ],
+        monkeypatch,
+        capsys,
+    )
+
+    assert "WARNING: the following planned entries are in the past" in out
+    assert "Planned rent" in out
+
+
+def test_cli_main_with_future_no_warning(monkeypatch, capsys, tmp_path):
+    j = tmp_path / "main.bean"
+    b = tmp_path / "budgets.bean"
+    p = tmp_path / "prices.bean"
+    for f in (j, b, p):
+        f.write_text("", encoding="utf-8")
+
+    def fake_run_forecast(**kwargs):
+        return {
+            "op_currency": "CRC",
+            "assets": (Decimal("100"), []),
+            "liabs": (Decimal("0"), []),
+            "planned_income": (Decimal("0"), []),
+            "planned_expenses": (Decimal("0"), []),
+            "planned_budget_exp": (Decimal("0"), []),
+            "net_now": Decimal("100"),
+            "forecast_end": Decimal("100"),
+            "ok": True,
+            "verbose": False,
+            "past_future": [],
+        }
+
+    monkeypatch.setattr(cli, "run_forecast", fake_run_forecast)
+    monkeypatch.setattr(cli, "detect_operating_currency_from_journal", lambda *_, **__: "CRC")
+    monkeypatch.setattr(cli, "load_prices_to_op", lambda *_: {"CRC": Decimal("1")})
+
+    out = _run_main_with_args(
+        [
+            "--journal", str(j),
+            "--budgets", str(b),
+            "--prices", str(p),
+            "--until", "2025-01-20",
+            "--today", "2025-01-10",
+            "--future", str(tmp_path / "future.bean"),
+        ],
+        monkeypatch,
+        capsys,
+    )
+
+    assert "WARNING: the following planned entries are in the past" not in out
+

@@ -76,6 +76,7 @@ class BudgetForecast(FavaExtensionBase):
 
         budgets = q.get("budgets", self._cfg.get("budgets", "")) or str(base_dir / "budgets.bean")
         prices  = q.get("prices",  self._cfg.get("prices",  "")) or str(base_dir / "prices.bean")
+        future = q.get("future", self._cfg.get("future", "")) or str(base_dir / "future.bean")
 
         # load available currencies from prices file for the selector
         try:
@@ -86,7 +87,16 @@ class BudgetForecast(FavaExtensionBase):
             available_currencies = [currency_param]
 
         # Param-based cache
-        cache_key = (str(journal_path), today, until, currency_param, budgets, prices, verbose)
+        cache_key = (
+            str(journal_path),
+            today,
+            until,
+            currency_param,
+            budgets,
+            prices,
+            future,
+            verbose,
+        )
         if getattr(self, "_cache_key", None) == cache_key and getattr(self, "_cache_data", None) is not None:
             return self._cache_data  # type: ignore[return-value]
 
@@ -98,6 +108,7 @@ class BudgetForecast(FavaExtensionBase):
             today=today,
             currency=currency_param,
             verbose=verbose,
+            future_journal=str(future),
         )
 
         cur = core["op_currency"]
@@ -106,6 +117,7 @@ class BudgetForecast(FavaExtensionBase):
         planned_income, pin_br = core["planned_income"]
         planned_exp, pexp_br = core["planned_expenses"]
         planned_budget_exp, budg_br = core["planned_budget_exp"]
+        past_future = core["past_future"]
 
         result = {
             "currencies": available_currencies,
@@ -114,7 +126,8 @@ class BudgetForecast(FavaExtensionBase):
             "until": core["until"],
             "quick_until": quick_until,
             "verbose": verbose,
-            "paths": {"budgets": budgets, "prices": prices},
+            "paths": {"budgets": budgets, "prices": prices, "future": future},
+            "past_future": past_future,
             "summary": {
                 "assets": assets_total,
                 "liabs": liabs_total,

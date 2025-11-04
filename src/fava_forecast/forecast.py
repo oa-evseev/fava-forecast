@@ -34,28 +34,36 @@ def q_liabs(until: datetime.date) -> str:
         "AND 'planned' NOT IN tags GROUP BY currency"
     )
 
-
-def q_planned_income(today: datetime.date, until: datetime.date) -> str:
+def q_future_income(today: datetime.date, until: datetime.date) -> str:
     return (
         "SELECT currency, sum(position) "
         "WHERE account ~ '^Income' "
         f"AND date >= {today.isoformat()} AND date < {until.isoformat()} "
-        "AND 'planned' IN tags GROUP BY currency"
+        "GROUP BY currency"
     )
 
 
-def q_planned_expenses(today: datetime.date, until: datetime.date) -> str:
+def q_future_expenses(today: datetime.date, until: datetime.date) -> str:
     return (
         "SELECT currency, sum(position) "
         "WHERE account ~ '^Expenses' "
         f"AND date >= {today.isoformat()} AND date < {until.isoformat()} "
-        "AND 'planned' IN tags GROUP BY currency"
+        "GROUP BY currency"
     )
 
 def run_grouped_rows(journal_path: str, query: str) -> List[Row]:
     lines = beanquery_run_lines(journal_path, query)
     body = beanquery_table_body(lines)
     return beanquery_grouped_amounts(body)
+
+def run_grouped_rows_all(journals: List[str], query: str) -> List[Row]:
+    acc: dict[str, Decimal] = {}
+    for j in journals:
+        rows = run_grouped_rows(j, query)
+        for cur, amt in rows:
+            acc[cur] = acc.get(cur, Decimal("0")) + amt
+    return list(acc.items())
+
 
 
 # ----------------------------------------------------------------
@@ -69,6 +77,7 @@ def run_forecast(
     today: str | None = None,
     currency: str = "CRC",
     verbose: bool = False,
+    future_journal: str | None = None,
 ) -> Dict[str, Any]:
     """Core forecasting logic used by both CLI and Fava extension."""
     until_date = datetime.date.fromisoformat(until)
@@ -88,11 +97,15 @@ def run_forecast(
     liabs_total, liabs_br = amounts_to_converted_breakdown(rows_liabs, rates)
 
     # income / expenses
-    rows_pin = run_grouped_rows(journal, q_planned_income(today_date, until_date))
+    journals = [journal]
+    if future_journal:
+        journals.append(future_journal)
+
+    rows_pin = run_grouped_rows_all(journals, q_future_income(today_date, until_date))
     rows_pin = [(cur, -amt) for (cur, amt) in rows_pin]
     planned_income, pin_br = amounts_to_converted_breakdown(rows_pin, rates)
 
-    rows_pexp = run_grouped_rows(journal, q_planned_expenses(today_date, until_date))
+    rows_pexp = run_grouped_rows_all(journals, q_future_expenses(today_date, until_date))
     planned_exp, pexp_br = amounts_to_converted_breakdown(rows_pexp, rates)
 
     # budgets
@@ -104,6 +117,15 @@ def run_forecast(
     net_now = assets_total + liabs_total
     total_future_exp = planned_exp + planned_budget_exp
     forecast_end = (net_now + planned_income - total_future_exp).quantize(Decimal("0.01"))
+
+    # past future rows
+    past_future_rows = []
+    if future_journal:
+        q_past = (
+            "SELECT date, narration, payee, account, position "
+            f"WHERE date < {today_date.isoformat()} "
+        )
+        past_future_rows = beanquery_run_lines(future_journal, q_past)
 
     return {
         "op_currency": op_currency,
@@ -118,5 +140,6 @@ def run_forecast(
         "forecast_end": forecast_end,
         "ok": forecast_end >= 0,
         "verbose": verbose,
+        "past_future": past_future_rows,
     }
 
